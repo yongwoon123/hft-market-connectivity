@@ -1,0 +1,41 @@
+# Markdown notes (keep README only)
+*.md
+!README.md
+
+# Build output
+build/
+out/
+
+# vcpkg build artifacts
+vcpkg_installed/
+
+# Compiled objects
+*.o
+*.a
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.clangd/
+.cache/
+
+# CMake generated (in-tree, if ever used)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+
+# compile_commands.json is useful for clangd - keep it if you symlink from build/
+# compile_commands.json
+
+# NASDAQ sample data (large binaries, download separately)
+data/sample_feed/*.gz
+data/sample_feed/*.bin
+data/sample_feed/*.itch
+
+# OS
+.DS_Store
+Thumbs.db
