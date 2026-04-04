@@ -10,5 +10,8 @@ add_compile_options(-Wall -Wextra -Wpedantic)
 
 # Subdirectories
 add_subdirectory(src)
+enable_testing()
+include(GoogleTest)
+
 add_subdirectory(tests)
 add_subdirectory(tools)

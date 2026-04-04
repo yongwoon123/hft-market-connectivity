@@ -1,1 +1,1 @@
-add_executable(hft-engine main.cpp)
+add_executable(hft-engine main.cpp feed/itch_handler.cpp)
