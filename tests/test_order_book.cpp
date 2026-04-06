@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "book/book_manager.h"
 #include "book/order_book.h"
 
 /*****************************************************************************
@@ -288,4 +289,71 @@ TEST(OrderBook, AskDepth_AscendingOrder)
   EXPECT_EQ(depth[0].first, 104'0000u);
   EXPECT_EQ(depth[1].first, 105'0000u);
   EXPECT_EQ(depth[2].first, 106'0000u);
+}
+
+/*****************************************************************************
+ * BookManager
+ *****************************************************************************/
+
+TEST(BookManager, UnknownLocate_ReturnsNullptr)
+{
+  BookManager mgr;
+  EXPECT_EQ(mgr.GetBook(42), nullptr);
+}
+
+TEST(BookManager, AddOrder_CreatesBook_BestBidVisible)
+{
+  BookManager mgr;
+  mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
+  ASSERT_NE(mgr.GetBook(1), nullptr);
+  ASSERT_TRUE(mgr.GetBook(1)->BestBid().has_value());
+  EXPECT_EQ(mgr.GetBook(1)->BestBid()->first, 100'0000u);
+}
+
+TEST(BookManager, TwoLocates_IndependentBooks)
+{
+  BookManager mgr;
+  mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
+  mgr.AddOrder(2, 2001, 200'0000, 30, 'S');
+  ASSERT_NE(mgr.GetBook(1), nullptr);
+  ASSERT_NE(mgr.GetBook(2), nullptr);
+  EXPECT_FALSE(mgr.GetBook(1)->BestAsk().has_value());
+  EXPECT_FALSE(mgr.GetBook(2)->BestBid().has_value());
+}
+
+TEST(BookManager, Cancel_RoutedToCorrectBook)
+{
+  BookManager mgr;
+  mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
+  mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
+  mgr.CancelOrder(1, 1001, 50);
+  EXPECT_FALSE(mgr.GetBook(1)->BestBid().has_value());
+  ASSERT_TRUE(mgr.GetBook(2)->BestBid().has_value());
+}
+
+TEST(BookManager, Delete_RoutedToCorrectBook)
+{
+  BookManager mgr;
+  mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
+  mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
+  mgr.DeleteOrder(1, 1001);
+  EXPECT_FALSE(mgr.GetBook(1)->BestBid().has_value());
+  ASSERT_TRUE(mgr.GetBook(2)->BestBid().has_value());
+}
+
+TEST(BookManager, Execute_RoutedToCorrectBook)
+{
+  BookManager mgr;
+  mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
+  mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
+  mgr.ExecuteOrder(1, 1001, 50);
+  EXPECT_FALSE(mgr.GetBook(1)->BestBid().has_value());
+  ASSERT_TRUE(mgr.GetBook(2)->BestBid().has_value());
+}
+
+TEST(BookManager, Execute_UnknownLocate_NoCrash)
+{
+  BookManager mgr;
+  mgr.ExecuteOrder(99, 1001, 10);
+  EXPECT_EQ(mgr.GetBook(99), nullptr);
 }
