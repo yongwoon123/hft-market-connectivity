@@ -17,19 +17,26 @@ ITCH connector  →  Order Book  →  OUCH connector
 
 | Component | Status |
 |-----------|--------|
-| ITCH 5.0 file parser | Done (4 message types: Add, Cancel, Execute, Delete) |
-| Order book | Planned |
+| ITCH 5.0 file parser | Done (Add, AddMpid, Cancel, Execute, Delete, Replace — more types being added) |
+| L2 order book | Done — AddOrder, CancelOrder, ExecuteOrder, DeleteOrder, ReplaceOrder, BidDepth, AskDepth |
+| BookManager routing layer | Done — `unordered_map<stockLocate, OrderBook>`, lazy construction |
+| End-to-end benchmark | Done — full NASDAQ file parse, book count/error/spread stats |
 | OUCH 5.0 order entry | Planned |
 | Live UDP feed ingestion | Planned |
 | End-to-end latency instrumentation | Planned |
 
-Validated against real NASDAQ historical ITCH data.
+Validated against real NASDAQ historical ITCH data (01302019): 7989 books constructed, 0 errors.
 
 ## Build
 
 ```bash
-cmake -B build -G Ninja && cmake --build build
-./build/src/hft-engine
+# Debug (default for tests and clangd)
+cmake --preset debug && cmake --build build/debug
+./build/debug/tests/hft-tests
+
+# Release (for benchmarking)
+cmake --preset release && cmake --build build/release
+./build/release/src/hft-engine
 ```
 
 ## Protocols
