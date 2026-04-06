@@ -21,7 +21,7 @@ ITCH connector  →  Order Book  →  OUCH connector
 | L2 Order book | Done — AddOrder, CancelOrder, ExecuteOrder, DeleteOrder, ReplaceOrder, BidDepth, AskDepth |
 | BookManager routing layer | Done — flat `vector<OrderBook>` indexed by stockLocate, two-pass init |
 | End-to-end benchmark | Done — full NASDAQ file parse, 60% mid-day snapshot, book count/error/spread stats |
-| OUCH 5.0 order entry | Planned |
+| OUCH 5.0 order entry | Done - SoupBinTCP framing, Enter Order + Cancel Order encoding, UserRefNum sequencing, ISender injection for testability |
 | Live UDP feed ingestion | Planned |
 | End-to-end latency instrumentation | Planned |
 
@@ -58,6 +58,8 @@ cmake --preset release && cmake --build build/release
 **Templated handler pattern** — the parser is templated on a handler type. Message dispatch is resolved at compile time with zero virtual call overhead. Handlers are swappable without touching the parser, making test handlers trivial to inject.
 
 **Lazy byteswap accessors** — wire-format structs store fields in big-endian as received. Each field exposes a typed accessor that byteswaps on read, so only accessed fields pay the conversion cost.
+
+**OUCH outbound encoding** — outbound message structs take host-order values in their constructor and store wire-ready big-endian bytes internally. A stateless template encoder prepends the SoupBinTCP frame header and memcpy's the struct into a pre-allocated session buffer — no heap allocation on the send path. Struct sizes are verified against the spec with `static_assert`. The session owns a monotonic UserRefNum counter seeded from milliseconds since midnight, guaranteeing the strictly-increasing invariant across reconnects within a trading day. `ISender` is injected at construction, making the full encode-and-send path testable without a live TCP connection.
 
 **Two-pass initialisation** — Pass 1 scans the pre-open session for Stock Directory (`'R'`) messages, collecting all valid stockLocate codes before the first order arrives. `BookManager` is then pre-constructed as a flat `vector<OrderBook>` indexed directly by stockLocate — O(1) array access replacing the hash map lookup on every message. Pass 2 parses the full file from the beginning; pre-open orders are processed correctly before trading starts at `'Q'` (Start of Market Hours). This mirrors live production systems, where the process starts before open and is fully initialised before the first order message arrives.
 
