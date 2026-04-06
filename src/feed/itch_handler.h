@@ -24,6 +24,7 @@ private:
   void OnMessage(const ItchOrderReplace& msg);
   void OnMessage(const ItchOrderCancel& msg);
   void OnMessage(const ItchOrderExecuted& msg);
+  void OnMessage(const ItchOrderExecutedWithPrice& msg);
   void OnMessage(const ItchOrderDelete& msg);
 
   BookManager& mBookManager;

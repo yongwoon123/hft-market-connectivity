@@ -54,11 +54,12 @@ void ItchParser<THandler>::ProcessMessage(const char* iter, const uint8_t msgTyp
 {
   switch (msgType)
   {
-    case 'A': mItchHandler.template Dispatch<ItchAddOrder>(iter);     break;
+    case 'A': mItchHandler.template Dispatch<ItchAddOrder>(iter); break;
     case 'F': mItchHandler.template Dispatch<ItchAddOrderMpid>(iter); break;
     case 'U': mItchHandler.template Dispatch<ItchOrderReplace>(iter); break;
     case 'X': mItchHandler.template Dispatch<ItchOrderCancel>(iter); break;
     case 'E': mItchHandler.template Dispatch<ItchOrderExecuted>(iter); break;
+    case 'C': mItchHandler.template Dispatch<ItchOrderExecutedWithPrice>(iter); break;
     case 'D': mItchHandler.template Dispatch<ItchOrderDelete>(iter); break;
 
     default:

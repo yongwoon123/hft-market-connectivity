@@ -1,7 +1,5 @@
 #include "itch_handler.h"
 
-#include "book/book_manager.h"
-
 ItchHandler::ItchHandler(BookManager& bookManager)
     : mBookManager(bookManager)
 {
@@ -40,6 +38,11 @@ void ItchHandler::OnMessage(const ItchOrderCancel& msg)
 }
 
 void ItchHandler::OnMessage(const ItchOrderExecuted& msg)
+{
+  mBookManager.ExecuteOrder(msg.StockLocate(), msg.OrderReferenceNumber(), msg.ExecutedShares());
+}
+
+void ItchHandler::OnMessage(const ItchOrderExecutedWithPrice& msg)
 {
   mBookManager.ExecuteOrder(msg.StockLocate(), msg.OrderReferenceNumber(), msg.ExecutedShares());
 }

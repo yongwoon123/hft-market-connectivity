@@ -151,3 +151,31 @@ private:
 };
 static_assert(sizeof(ItchOrderDelete) == 19, "Size mismatch with ITCH 5.0 Spec");
 #pragma pack(pop)
+
+// 'C' — Order Executed With Price
+#pragma pack(push, 1)
+struct ItchOrderExecutedWithPrice
+{
+public:
+  uint16_t                    StockLocate()          const { return __builtin_bswap16(stockLocate); }
+  uint16_t                    TrackingNumber()       const { return __builtin_bswap16(trackingNumber); }
+  std::span<const uint8_t, 6> Timestamp()            const { return timestamp; }
+  uint64_t                    OrderReferenceNumber() const { return __builtin_bswap64(orderReferenceNumber); }
+  uint32_t                    ExecutedShares()       const { return __builtin_bswap32(executedShares); }
+  uint64_t                    MatchNumber()          const { return __builtin_bswap64(matchNumber); }
+  char                        Printable()            const { return printable; }
+  uint32_t                    ExecutionPrice()       const { return __builtin_bswap32(executionPrice); }
+
+private:
+  char     msgType;
+  uint16_t stockLocate;
+  uint16_t trackingNumber;
+  uint8_t  timestamp[6];
+  uint64_t orderReferenceNumber;
+  uint32_t executedShares;
+  uint64_t matchNumber;
+  char     printable;        // 'Y' = printable to tape, 'N' = non-printable
+  uint32_t executionPrice;   // Fixed-point, divide by 10'000; may differ from resting price
+};
+static_assert(sizeof(ItchOrderExecutedWithPrice) == 36, "Size mismatch with ITCH 5.0 Spec");
+#pragma pack(pop)
