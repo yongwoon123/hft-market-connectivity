@@ -9,9 +9,10 @@ class BookManager
 {
 public:
   void AddOrder(uint16_t locate, uint64_t orderRef, uint32_t price, uint32_t quantity, char side) noexcept;
-  void CancelOrder(uint16_t locate, uint64_t orderRef, uint32_t cancelQuantity) noexcept;
+  void CancelOrder(uint16_t locate, uint64_t orderRef, uint32_t cancelledQuantity) noexcept;
   void ExecuteOrder(uint16_t locate, uint64_t orderRef, uint32_t executedQuantity) noexcept;
   void DeleteOrder(uint16_t locate, uint64_t orderRef) noexcept;
+  void ReplaceOrder(uint16_t locate, uint64_t oldOrderRef, uint64_t newOrderRef, uint32_t price, uint32_t quantity) noexcept;
 
   const OrderBook* GetBook(uint16_t locate) const noexcept;
 

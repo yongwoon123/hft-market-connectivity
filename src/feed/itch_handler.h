@@ -2,11 +2,14 @@
 
 #include <cstring>
 
+#include "book/book_manager.h"
 #include "itch_message_types.h"
 
 class ItchHandler
 {
 public:
+  ItchHandler(BookManager& bookManager);
+
   template <typename T>
   void Dispatch(const char* buffer)
   {
@@ -17,12 +20,11 @@ public:
 
 private:
   void OnMessage(const ItchAddOrder& msg);
+  void OnMessage(const ItchAddOrderMpid& msg);
+  void OnMessage(const ItchOrderReplace& msg);
   void OnMessage(const ItchOrderCancel& msg);
   void OnMessage(const ItchOrderExecuted& msg);
   void OnMessage(const ItchOrderDelete& msg);
 
-  uint64_t mAddOrderCount = 0;
-  uint64_t mOrderCancelCount = 0;
-  uint64_t mOrderExecutedCount = 0;
-  uint64_t mOrderDeleteCount = 0;
+  BookManager& mBookManager;
 };

@@ -1,6 +1,6 @@
 #include "order_book.h"
 
-void OrderBook::AddOrder(uint64_t orderRef, uint32_t price, uint32_t quantity, char side)
+void OrderBook::AddOrder(uint64_t orderRef, uint32_t price, uint32_t quantity, char side) noexcept
 {
   if ((side != 'B' && side != 'S') || mOrders.contains(orderRef))
   {
@@ -24,7 +24,7 @@ void OrderBook::AddOrder(uint64_t orderRef, uint32_t price, uint32_t quantity, c
 // CancelOrder and ExecuteOrder have identical book mutations
 // They are kept as separate methods because they represent distinct ITCH 5.0 message types
 // (OrderCancel vs OrderExecuted), and will diverge with more coverage
-void OrderBook::CancelOrder(uint64_t orderRef, uint32_t cancelledQuantity)
+void OrderBook::CancelOrder(uint64_t orderRef, uint32_t cancelledQuantity) noexcept
 {
   auto iter = mOrders.find(orderRef);
   if (iter == mOrders.end())
@@ -36,7 +36,7 @@ void OrderBook::CancelOrder(uint64_t orderRef, uint32_t cancelledQuantity)
   ReduceLevel(iter->second, cancelledQuantity);
 }
 
-void OrderBook::ExecuteOrder(uint64_t orderRef, uint32_t executedQuantity)
+void OrderBook::ExecuteOrder(uint64_t orderRef, uint32_t executedQuantity) noexcept
 {
   auto iter = mOrders.find(orderRef);
   if (iter == mOrders.end())
@@ -48,7 +48,7 @@ void OrderBook::ExecuteOrder(uint64_t orderRef, uint32_t executedQuantity)
   ReduceLevel(iter->second, executedQuantity);
 }
 
-void OrderBook::DeleteOrder(uint64_t orderRef)
+void OrderBook::DeleteOrder(uint64_t orderRef) noexcept
 {
   auto iter = mOrders.find(orderRef);
   if (iter == mOrders.end())
@@ -63,6 +63,23 @@ void OrderBook::DeleteOrder(uint64_t orderRef)
   }
 
   mOrders.erase(iter);
+}
+
+void OrderBook::ReplaceOrder(uint64_t oldOrderRef,
+                             uint64_t newOrderRef,
+                             uint32_t price,
+                             uint32_t quantity) noexcept
+{
+  auto iter = mOrders.find(oldOrderRef);
+  if (iter == mOrders.end())
+  {
+    ++mErrorCount;
+    return;
+  }
+
+  char side = static_cast<char>(iter->second.side);
+  DeleteOrder(oldOrderRef);
+  AddOrder(newOrderRef, price, quantity, side);
 }
 
 void OrderBook::ReduceLevel(OrderEntry& entry, uint32_t quantity)
@@ -105,25 +122,25 @@ void OrderBook::ReduceLevel(OrderEntry& entry, uint32_t quantity)
   }
 }
 
-std::optional<std::pair<uint32_t, uint32_t>> OrderBook::BestBid() const
+std::optional<std::pair<uint32_t, uint32_t>> OrderBook::BestBid() const noexcept
 {
   if (mBids.empty()) return std::nullopt;
   return *mBids.rbegin();
 }
 
-std::optional<std::pair<uint32_t, uint32_t>> OrderBook::BestAsk() const
+std::optional<std::pair<uint32_t, uint32_t>> OrderBook::BestAsk() const noexcept
 {
   if (mAsks.empty()) return std::nullopt;
   return *mAsks.begin();
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> OrderBook::BidDepth(size_t depth) const
+std::vector<std::pair<uint32_t, uint32_t>> OrderBook::BidDepth(size_t depth) const noexcept
 {
   auto end = std::next(mBids.rbegin(), static_cast<ptrdiff_t>(std::min(depth, mBids.size())));
   return {mBids.rbegin(), end};
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> OrderBook::AskDepth(size_t depth) const
+std::vector<std::pair<uint32_t, uint32_t>> OrderBook::AskDepth(size_t depth) const noexcept
 {
   auto end = std::next(mAsks.begin(), static_cast<ptrdiff_t>(std::min(depth, mAsks.size())));
   return {mAsks.begin(), end};
