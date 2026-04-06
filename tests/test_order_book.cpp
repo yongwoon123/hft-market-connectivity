@@ -1,7 +1,19 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <unordered_set>
+
 #include "book/book_manager.h"
 #include "book/order_book.h"
+
+// Constructs a BookManager pre-populated with the given locate codes,
+// mirroring the two-pass initialisation in production.
+static BookManager makeManager(std::initializer_list<uint16_t> locates)
+{
+  std::unordered_set<uint16_t> set(locates);
+  uint16_t maxLocate = set.empty() ? 0 : *std::max_element(set.begin(), set.end());
+  return BookManager(set, maxLocate);
+}
 
 /*****************************************************************************
  * AddOrder
@@ -73,7 +85,7 @@ TEST(OrderBook, DuplicateOrderRef_ErrorCounted_BookUnchanged)
   EXPECT_EQ(book.ErrorCount(), 1u);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first,  100'0000u);
+  EXPECT_EQ(bid->first, 100'0000u);
   EXPECT_EQ(bid->second, 50u);
 }
 
@@ -302,7 +314,7 @@ TEST(OrderBook, Replace_NewRefVisibleAtNewPrice)
   book.ReplaceOrder(1001, 2001, 101'0000, 30);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first,  101'0000u);
+  EXPECT_EQ(bid->first, 101'0000u);
   EXPECT_EQ(bid->second, 30u);
   EXPECT_EQ(book.ErrorCount(), 0u);
 }
@@ -327,7 +339,7 @@ TEST(OrderBook, Replace_PreservesSharedLevel)
   // 1002 still at 100'0000
   auto depth = book.BidDepth(10);
   ASSERT_EQ(depth.size(), 2u);
-  EXPECT_EQ(depth[0].first,  101'0000u);
+  EXPECT_EQ(depth[0].first, 101'0000u);
   EXPECT_EQ(depth[1].second, 20u);
 }
 
@@ -368,13 +380,13 @@ TEST(OrderBook, AskDepth_AscendingOrder)
 
 TEST(BookManager, UnknownLocate_ReturnsNullptr)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1});
   EXPECT_EQ(mgr.GetBook(42), nullptr);
 }
 
 TEST(BookManager, AddOrder_CreatesBook_BestBidVisible)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1});
   mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
   const OrderBook* book = mgr.GetBook(1);
   ASSERT_NE(book, nullptr);
@@ -385,7 +397,7 @@ TEST(BookManager, AddOrder_CreatesBook_BestBidVisible)
 
 TEST(BookManager, TwoLocates_IndependentBooks)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1, 2});
   mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
   mgr.AddOrder(2, 2001, 200'0000, 30, 'S');
   ASSERT_NE(mgr.GetBook(1), nullptr);
@@ -396,7 +408,7 @@ TEST(BookManager, TwoLocates_IndependentBooks)
 
 TEST(BookManager, Cancel_RoutedToCorrectBook)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1, 2});
   mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
   mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
   mgr.CancelOrder(1, 1001, 50);
@@ -406,7 +418,7 @@ TEST(BookManager, Cancel_RoutedToCorrectBook)
 
 TEST(BookManager, Delete_RoutedToCorrectBook)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1, 2});
   mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
   mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
   mgr.DeleteOrder(1, 1001);
@@ -416,7 +428,7 @@ TEST(BookManager, Delete_RoutedToCorrectBook)
 
 TEST(BookManager, Execute_RoutedToCorrectBook)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1, 2});
   mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
   mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
   mgr.ExecuteOrder(1, 1001, 50);
@@ -426,14 +438,14 @@ TEST(BookManager, Execute_RoutedToCorrectBook)
 
 TEST(BookManager, Execute_UnknownLocate_NoCrash)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1});
   mgr.ExecuteOrder(99, 1001, 10);
   EXPECT_EQ(mgr.GetBook(99), nullptr);
 }
 
 TEST(BookManager, Replace_RoutedToCorrectBook)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1, 2});
   mgr.AddOrder(1, 1001, 100'0000, 50, 'B');
   mgr.AddOrder(2, 2001, 200'0000, 30, 'B');
   mgr.ReplaceOrder(1, 1001, 3001, 101'0000, 25);
@@ -441,7 +453,7 @@ TEST(BookManager, Replace_RoutedToCorrectBook)
   ASSERT_NE(book1, nullptr);
   auto bid1 = book1->BestBid();
   ASSERT_TRUE(bid1.has_value());
-  EXPECT_EQ(bid1->first,  101'0000u);
+  EXPECT_EQ(bid1->first, 101'0000u);
   EXPECT_EQ(bid1->second, 25u);
   const OrderBook* book2 = mgr.GetBook(2);
   ASSERT_NE(book2, nullptr);
@@ -452,7 +464,7 @@ TEST(BookManager, Replace_RoutedToCorrectBook)
 
 TEST(BookManager, Replace_UnknownLocate_NoCrash)
 {
-  BookManager mgr;
+  BookManager mgr = makeManager({1});
   mgr.ReplaceOrder(99, 1001, 2001, 100'0000, 50);
   EXPECT_EQ(mgr.GetBook(99), nullptr);
 }

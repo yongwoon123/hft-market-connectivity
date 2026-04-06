@@ -1,8 +1,14 @@
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <unordered_set>
+#include <vector>
 
 #include "book/book_manager.h"
 #include "feed/itch_handler.h"
+#include "feed/itch_message_types.h"
 #include "feed/itch_parser.h"
 #include "infra/clock.h"
 
@@ -17,27 +23,80 @@ static void printProgress(uint64_t done, uint64_t total)
   std::cout << "] " << std::setw(3) << static_cast<int>(pct * 100) << "%" << std::flush;
 }
 
+struct PreOpenResult
+{
+  std::unordered_set<uint16_t> validLocates;
+  uint16_t                     maxLocate = 0;
+};
+
+static PreOpenResult runPass1(const std::filesystem::path& path)
+{
+  PreOpenResult result;
+  std::ifstream file(path, std::ios::binary);
+  std::vector<char> buf(64);
+
+  while (file.good())
+  {
+    uint16_t msgLen;
+    file.read(reinterpret_cast<char*>(&msgLen), 2);
+    if (!file.good()) break;
+    msgLen = __builtin_bswap16(msgLen);
+
+    buf.resize(msgLen);
+    file.read(buf.data(), msgLen);
+    if (!file.good()) break;
+
+    const uint8_t msgType = static_cast<uint8_t>(buf[0]);
+
+    if (msgType == 'R')
+    {
+      ItchStockDirectory msg;
+      std::memcpy(&msg, buf.data(), sizeof(ItchStockDirectory));
+      const uint16_t locate = msg.StockLocate();
+      result.validLocates.insert(locate);
+      if (locate > result.maxLocate) result.maxLocate = locate;
+    }
+    else if (msgType == 'S')
+    {
+      ItchSystemEvent msg;
+      std::memcpy(&msg, buf.data(), sizeof(ItchSystemEvent));
+      if (msg.EventCode() == 'Q')
+      {
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
 int main()
 {
+  static constexpr const char* kFeedPath = "data/sample_feed/01302019.NASDAQ_ITCH50";
+  static constexpr int         kSampleSize = 5;
+
   std::cout << "hft-engine starting\n";
+  std::cout << "Pass 1: scanning pre-open messages...\n";
 
-  BookManager bookManager;
+  const PreOpenResult preOpen = runPass1(kFeedPath);
+
+  std::cout << "  Locates: " << preOpen.validLocates.size()
+            << "  max=" << preOpen.maxLocate << "\n";
+
+  BookManager bookManager(preOpen.validLocates, preOpen.maxLocate);
   ItchHandler handler{bookManager};
-  ItchParser parser{"data/sample_feed/01302019.NASDAQ_ITCH50", handler};
-
-  static constexpr int kSampleSize = 5;
-  static constexpr uint16_t kMaxLocate = 8000;
+  ItchParser  parser{kFeedPath, handler};
 
   auto printBookStats = [&](const char* label)
   {
-    uint64_t totalBooks = 0;
+    uint64_t totalBooks  = 0;
     uint64_t totalErrors = 0;
-    uint64_t twoSided = 0;
-    uint64_t inverted = 0;
-    int samples = 0;
+    uint64_t twoSided    = 0;
+    uint64_t inverted    = 0;
+    int      samples     = 0;
 
     std::cout << "\n--- " << label << " ---\n";
-    for (uint16_t loc = 1; loc <= kMaxLocate; ++loc)
+    for (uint16_t loc : bookManager.ValidLocates())
     {
       const OrderBook* book = bookManager.GetBook(loc);
       if (!book) continue;
@@ -56,19 +115,17 @@ int main()
 
       if (samples < kSampleSize)
       {
-        std::cout << "  locate=" << loc << " bid=" << bid->first / 10000 << "." << std::setw(2)
-                  << std::setfill('0') << (bid->first % 10000) / 100 << "x" << bid->second
-                  << " ask=" << ask->first / 10000 << "." << std::setw(2) << std::setfill('0')
-                  << (ask->first % 10000) / 100 << "x" << ask->second << "\n";
+        std::cout << "  locate=" << loc
+                  << " bid=" << bid->first / 10000 << "." << std::setw(2) << std::setfill('0') << (bid->first % 10000) / 100 << "x" << bid->second
+                  << " ask=" << ask->first / 10000 << "." << std::setw(2) << std::setfill('0') << (ask->first % 10000) / 100 << "x" << ask->second
+                  << "\n";
         ++samples;
       }
     }
 
-    std::cout << "Books:   " << totalBooks << "\n"
-              << "2-sided: " << twoSided << " (" << inverted << " inverted)\n"
+    std::cout << "Books:   " << totalBooks  << "\n"
+              << "2-sided: " << twoSided    << " (" << inverted << " inverted)\n"
               << "Errors:  " << totalErrors << "\n";
-
-    return samples;
   };
 
   bool snapshotTaken = false;
@@ -78,18 +135,19 @@ int main()
     if (!snapshotTaken && total > 0 && done >= total * 6 / 10)
     {
       snapshotTaken = true;
-      printBookStats("60'%' snapshot");
+      printBookStats("60% snapshot");
       std::cout << std::flush;
     }
   };
+
+  std::cout << "Pass 2: parsing full file (pre-open orders must be in book before trading starts)...\n";
 
   uint64_t start = infra::now_ns();
   parser.Parse(0, progress);
   std::cout << "\n";
   uint64_t elapsed_ns = infra::now_ns() - start;
 
-  double elapsed_s = static_cast<double>(elapsed_ns) / 1e9;
-  std::cout << "Elapsed: " << elapsed_s << "s\n";
+  std::cout << "Elapsed: " << static_cast<double>(elapsed_ns) / 1e9 << "s\n";
 
   printBookStats("end of day");
 

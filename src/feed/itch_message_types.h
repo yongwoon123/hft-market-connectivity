@@ -6,6 +6,74 @@
 // Fields are intentionally duplicated across structs rather than extracted into a common base.
 // Inheritance breaks standard-layout, making offsetof on derived members undefined behaviour
 // and preventing reliable static_assert layout validation against the wire format.
+
+// 'S' — System Event
+#pragma pack(push, 1)
+struct ItchSystemEvent
+{
+public:
+  uint16_t                    StockLocate()    const { return __builtin_bswap16(stockLocate); }
+  uint16_t                    TrackingNumber() const { return __builtin_bswap16(trackingNumber); }
+  std::span<const uint8_t, 6> Timestamp()      const { return timestamp; }
+  char                        EventCode()      const { return eventCode; }
+
+private:
+  char     msgType;
+  uint16_t stockLocate;
+  uint16_t trackingNumber;
+  uint8_t  timestamp[6];
+  char     eventCode;  // 'O'=start of messages, 'S'=system hours, 'Q'=market hours,
+                       // 'M'=market close, 'E'=end system hours, 'C'=end of messages
+};
+static_assert(sizeof(ItchSystemEvent) == 12, "Size mismatch with ITCH 5.0 Spec");
+#pragma pack(pop)
+
+// 'R' — Stock Directory
+#pragma pack(push, 1)
+struct ItchStockDirectory
+{
+public:
+  uint16_t                    StockLocate()              const { return __builtin_bswap16(stockLocate); }
+  uint16_t                    TrackingNumber()           const { return __builtin_bswap16(trackingNumber); }
+  std::span<const uint8_t, 6> Timestamp()                const { return timestamp; }
+  const char*                 Stock()                    const { return stock; }
+  char                        MarketCategory()           const { return marketCategory; }
+  char                        FinancialStatusIndicator() const { return financialStatusIndicator; }
+  uint32_t                    RoundLotSize()             const { return __builtin_bswap32(roundLotSize); }
+  char                        RoundLotsOnly()            const { return roundLotsOnly; }
+  char                        IssueClassification()      const { return issueClassification; }
+  const char*                 IssueSubType()             const { return issueSubType; }
+  char                        Authenticity()             const { return authenticity; }
+  char                        ShortSaleThreshold()       const { return shortSaleThreshold; }
+  char                        IpoFlag()                  const { return ipoFlag; }
+  char                        LuldReferencePriceTier()   const { return luldReferencePriceTier; }
+  char                        EtpFlag()                  const { return etpFlag; }
+  uint32_t                    EtpLeverageFactor()        const { return __builtin_bswap32(etpLeverageFactor); }
+  char                        InverseIndicator()         const { return inverseIndicator; }
+
+private:
+  char     msgType;
+  uint16_t stockLocate;
+  uint16_t trackingNumber;
+  uint8_t  timestamp[6];
+  char     stock[8];                  // Right-padded with spaces
+  char     marketCategory;            // 'Q'=Nasdaq, 'N'=NYSE, 'A'=NYSE MKT, etc.
+  char     financialStatusIndicator;
+  uint32_t roundLotSize;
+  char     roundLotsOnly;
+  char     issueClassification;
+  char     issueSubType[2];
+  char     authenticity;
+  char     shortSaleThreshold;
+  char     ipoFlag;
+  char     luldReferencePriceTier;
+  char     etpFlag;
+  uint32_t etpLeverageFactor;
+  char     inverseIndicator;
+};
+static_assert(sizeof(ItchStockDirectory) == 39, "Size mismatch with ITCH 5.0 Spec");
+#pragma pack(pop)
+
 #pragma pack(push, 1)
 struct ItchAddOrder
 {

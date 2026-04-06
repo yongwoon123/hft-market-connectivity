@@ -1,47 +1,49 @@
 #include "book_manager.h"
 
+BookManager::BookManager(const std::unordered_set<uint16_t>& validLocates, uint16_t maxLocate)
+    : mBooks(maxLocate + 1)
+    , mValidLocates(validLocates)
+{
+}
+
 void BookManager::AddOrder(uint16_t locate,
                            uint64_t orderRef,
                            uint32_t price,
                            uint32_t quantity,
                            char side) noexcept
 {
-  mBooks[locate].AddOrder(orderRef, price, quantity, side);
+  if (locate < mBooks.size())
+  {
+    mBooks[locate].AddOrder(orderRef, price, quantity, side);
+  }
 }
 
-void BookManager::CancelOrder(uint16_t locate, uint64_t orderRef, uint32_t cancelledQuantity) noexcept
+void BookManager::CancelOrder(uint16_t locate,
+                              uint64_t orderRef,
+                              uint32_t cancelledQuantity) noexcept
 {
-  auto iter = mBooks.find(locate);
-  if (iter == mBooks.end())
+  if (locate < mBooks.size())
   {
-    return;
+    mBooks[locate].CancelOrder(orderRef, cancelledQuantity);
   }
-
-  iter->second.CancelOrder(orderRef, cancelledQuantity);
 }
 
 void BookManager::ExecuteOrder(uint16_t locate,
                                uint64_t orderRef,
                                uint32_t executedQuantity) noexcept
 {
-  auto iter = mBooks.find(locate);
-  if (iter == mBooks.end())
+  if (locate < mBooks.size())
   {
-    return;
+    mBooks[locate].ExecuteOrder(orderRef, executedQuantity);
   }
-
-  iter->second.ExecuteOrder(orderRef, executedQuantity);
 }
 
 void BookManager::DeleteOrder(uint16_t locate, uint64_t orderRef) noexcept
 {
-  auto iter = mBooks.find(locate);
-  if (iter == mBooks.end())
+  if (locate < mBooks.size())
   {
-    return;
+    mBooks[locate].DeleteOrder(orderRef);
   }
-
-  iter->second.DeleteOrder(orderRef);
 }
 
 void BookManager::ReplaceOrder(uint16_t locate,
@@ -50,22 +52,17 @@ void BookManager::ReplaceOrder(uint16_t locate,
                                uint32_t price,
                                uint32_t quantity) noexcept
 {
-  auto iter = mBooks.find(locate);
-  if (iter == mBooks.end())
+  if (locate < mBooks.size())
   {
-    return;
+    mBooks[locate].ReplaceOrder(oldOrderRef, newOrderRef, price, quantity);
   }
-
-  iter->second.ReplaceOrder(oldOrderRef, newOrderRef, price, quantity);
 }
 
 const OrderBook* BookManager::GetBook(uint16_t locate) const noexcept
 {
-  auto iter = mBooks.find(locate);
-  if (iter == mBooks.end())
+  if (!mValidLocates.contains(locate))
   {
     return nullptr;
   }
-
-  return &iter->second;
+  return &mBooks[locate];
 }
