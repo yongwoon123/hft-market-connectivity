@@ -17,15 +17,15 @@ ITCH connector  →  Order Book  →  OUCH connector
 
 | Component | Status |
 |-----------|--------|
-| ITCH 5.0 file parser | Done (Add, AddMpid, Cancel, Execute, Delete, Replace — more types being added) |
-| L2 order book | Done — AddOrder, CancelOrder, ExecuteOrder, DeleteOrder, ReplaceOrder, BidDepth, AskDepth |
-| BookManager routing layer | Done — `unordered_map<stockLocate, OrderBook>`, lazy construction |
-| End-to-end benchmark | Done — full NASDAQ file parse, book count/error/spread stats |
+| ITCH 5.0 file parser | Done (Add, AddMpid, Cancel, Execute, ExecuteWithPrice, Delete, Replace) |
+| L2 Order book | Done — AddOrder, CancelOrder, ExecuteOrder, DeleteOrder, ReplaceOrder, BidDepth, AskDepth |
+| BookManager routing layer | Done — flat `vector<OrderBook>` indexed by stockLocate, two-pass init |
+| End-to-end benchmark | Done — full NASDAQ file parse, 60% mid-day snapshot, book count/error/spread stats |
 | OUCH 5.0 order entry | Planned |
 | Live UDP feed ingestion | Planned |
 | End-to-end latency instrumentation | Planned |
 
-Validated against real NASDAQ historical ITCH data (01302019): 7989 books constructed, 0 errors.
+Validated against real NASDAQ historical ITCH data (01302019).
 
 ## Build
 
@@ -58,6 +58,8 @@ cmake --preset release && cmake --build build/release
 **Templated handler pattern** — the parser is templated on a handler type. Message dispatch is resolved at compile time with zero virtual call overhead. Handlers are swappable without touching the parser, making test handlers trivial to inject.
 
 **Lazy byteswap accessors** — wire-format structs store fields in big-endian as received. Each field exposes a typed accessor that byteswaps on read, so only accessed fields pay the conversion cost.
+
+**Two-pass initialisation** — Pass 1 scans the pre-open session for Stock Directory (`'R'`) messages, collecting all valid stockLocate codes before the first order arrives. `BookManager` is then pre-constructed as a flat `vector<OrderBook>` indexed directly by stockLocate — O(1) array access replacing the hash map lookup on every message. Pass 2 parses the full file from the beginning; pre-open orders are processed correctly before trading starts at `'Q'` (Start of Market Hours). This mirrors live production systems, where the process starts before open and is fully initialised before the first order message arrives.
 
 ## Architecture
 
