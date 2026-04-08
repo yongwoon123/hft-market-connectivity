@@ -11,6 +11,10 @@
 #include "feed/itch_message_types.h"
 #include "feed/itch_parser.h"
 #include "infra/clock.h"
+#include "order_entry/isender.h"
+#include "order_entry/ouch_entry_session.h"
+#include "order_entry/ouch_message_types.h"
+#include "strategy/passive_quoter.h"
 
 static void printProgress(uint64_t done, uint64_t total)
 {
@@ -23,10 +27,33 @@ static void printProgress(uint64_t done, uint64_t total)
   std::cout << "] " << std::setw(3) << static_cast<int>(pct * 100) << "%" << std::flush;
 }
 
+// Logs outbound bytes to stdout rather than sending to NASDAQ
+struct PrintSender : ISender
+{
+  void Send(const uint8_t* data, size_t len) override
+  {
+    std::cout << "\n[OUCH] Sending " << len << " bytes\n";
+    for (size_t i = 0; i < len; ++i)
+      std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]) << ' ';
+    std::cout << std::dec << '\n';
+
+    const auto* msg = reinterpret_cast<const OuchEnterOrder*>(data + 3);
+    std::cout << "  Type:    " << msg->GetType()     << " (Enter Order)\n"
+              << "  UserRef: " << msg->GetUserRefNum() << '\n'
+              << "  Side:    " << msg->GetSide()      << '\n'
+              << "  Qty:     " << msg->GetQuantity()  << '\n'
+              << "  Symbol:  " << std::string(msg->GetSymbol(), 8) << '\n'
+              << "  Price:   " << msg->GetPrice() / 10000 << "."
+                               << std::setw(4) << std::setfill('0') << msg->GetPrice() % 10000 << '\n';
+  }
+};
+
 struct PreOpenResult
 {
   std::unordered_set<uint16_t> validLocates;
   uint16_t                     maxLocate = 0;
+  uint16_t                     demoLocate = 0;
+  char                         demoSymbol[8] = {};
 };
 
 static PreOpenResult runPass1(const std::filesystem::path& path)
@@ -55,6 +82,11 @@ static PreOpenResult runPass1(const std::filesystem::path& path)
       const uint16_t locate = msg.StockLocate();
       result.validLocates.insert(locate);
       if (locate > result.maxLocate) result.maxLocate = locate;
+      if (result.demoLocate == 0)
+      {
+        result.demoLocate = locate;
+        std::memcpy(result.demoSymbol, msg.Stock(), 8);
+      }
     }
     else if (msgType == 'S')
     {
@@ -82,10 +114,16 @@ int main()
 
   std::cout << "  Locates: " << preOpen.validLocates.size()
             << "  max=" << preOpen.maxLocate << "\n";
+  std::cout << "  Demo symbol: " << std::string(preOpen.demoSymbol, 8)
+            << " (locate=" << preOpen.demoLocate << ")\n";
 
-  BookManager bookManager(preOpen.validLocates, preOpen.maxLocate);
-  ItchHandler handler{bookManager};
-  ItchParser  parser{kFeedPath, handler};
+  BookManager          bookManager(preOpen.validLocates, preOpen.maxLocate);
+  PrintSender          sender;
+  OrderEntrySession    session{sender};
+  session.SetLoggedIn();
+  PassiveQuoter        strategy{preOpen.demoLocate, preOpen.demoSymbol, session};
+  ItchHandler<PassiveQuoter> handler{bookManager, strategy};
+  ItchParser<ItchHandler<PassiveQuoter>> parser{kFeedPath, handler};
 
   auto printBookStats = [&](const char* label)
   {

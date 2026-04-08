@@ -5,10 +5,11 @@
 #include "book/book_manager.h"
 #include "itch_message_types.h"
 
+template <typename TStrategy>
 class ItchHandler
 {
 public:
-  ItchHandler(BookManager& bookManager);
+  ItchHandler(BookManager& bookManager, TStrategy& strategy);
 
   template <typename T>
   void Dispatch(const char* buffer)
@@ -28,4 +29,7 @@ private:
   void OnMessage(const ItchOrderDelete& msg);
 
   BookManager& mBookManager;
+  TStrategy& mStrategy;
 };
+
+#include "itch_handler.hpp"
