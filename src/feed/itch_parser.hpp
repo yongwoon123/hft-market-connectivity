@@ -1,16 +1,67 @@
 #pragma once
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <cerrno>
 #include <cstring>
-#include <vector>
+#include <stdexcept>
 
 #include "itch_message_types.h"
 #include "itch_parser.h"  // clangd: provides class declaration for standalone analysis
 
 template <typename THandler>
-ItchParser<THandler>::ItchParser(const std::filesystem::path& path, THandler& tHandler)
-    : mFileHandler(path, std::ios::binary)
-    , mItchHandler(tHandler)
+ItchParser<THandler>::ItchParser(const std::filesystem::path& path, THandler& handler)
+    : mFileDescriptor(::open(path.c_str(), O_RDONLY))
+    , mBuffer(ItchParser::kBufSize)
+    , mItchHandler(handler)
 {
-  mFileSize = std::filesystem::file_size(path);
+  if (mFileDescriptor < 0)
+  {
+    throw std::runtime_error("ItchParser: failed to open " + path.string());
+  }
+
+  struct stat st;
+  if (::fstat(mFileDescriptor, &st) == 0)
+  {
+    mFileSize = static_cast<uint64_t>(st.st_size);
+  }
+}
+
+template <typename THandler>
+ItchParser<THandler>::~ItchParser()
+{
+  if (mFileDescriptor >= 0)
+  {
+    ::close(mFileDescriptor);
+  }
+}
+
+template <typename THandler>
+bool ItchParser<THandler>::Refill()
+{
+  const size_t remaining = mFillEnd - mCursor;
+  if (remaining > 0)
+  {
+    std::memmove(mBuffer.data(), mBuffer.data() + mCursor, remaining);
+  }
+
+  mCursor = 0;
+  mFillEnd = remaining;
+
+  ssize_t n;
+  do
+  {
+    n = ::read(mFileDescriptor, mBuffer.data() + remaining, ItchParser::kBufSize - remaining);
+  } while (n < 0 && errno == EINTR);
+
+  if (n > 0)
+  {
+    mFillEnd += static_cast<size_t>(n);
+  }
+
+  return mFillEnd > 0;
 }
 
 template <typename THandler>
@@ -19,27 +70,31 @@ void ItchParser<THandler>::Parse(uint64_t limit, std::function<void(uint64_t, ui
   static constexpr uint64_t kProgressInterval = 1'000'000;
 
   uint64_t count = 0;
+  uint64_t consumed = 0;
 
-  std::vector<char> buffer(256);
-  while (mFileHandler.good() && (limit == 0 || count < limit))
+  while (limit == 0 || count < limit)
   {
-    uint16_t msgLength;
-    mFileHandler.read(reinterpret_cast<char*>(&msgLength), 2);
-    if (!mFileHandler.good())
+    if (mFillEnd - mCursor < ItchParser::kMinHeadroom)
     {
-      break;
+      if (!Refill() || mFillEnd - mCursor < 2) break;
     }
+
+    uint16_t msgLength;
+    std::memcpy(&msgLength, mBuffer.data() + mCursor, 2);
     msgLength = __builtin_bswap16(msgLength);
+    mCursor += 2;
 
-    buffer.resize(msgLength);
-    mFileHandler.read(buffer.data(), msgLength);
+    if (mFillEnd - mCursor < msgLength) break;  // truncated message at EOF
 
-    uint8_t msgType = static_cast<uint8_t>(buffer[0]);
-    ProcessMessage(buffer.data(), msgType);
+    const uint8_t msgType = static_cast<uint8_t>(mBuffer[mCursor]);
+    ProcessMessage(mBuffer.data() + mCursor, msgType);
+
+    consumed += 2 + msgLength;
+    mCursor += msgLength;
 
     if (progress && ++count % kProgressInterval == 0)
     {
-      progress(static_cast<uint64_t>(mFileHandler.tellg()), mFileSize);
+      progress(consumed, mFileSize);
     }
   }
 
@@ -62,11 +117,6 @@ void ItchParser<THandler>::ProcessMessage(const char* iter, const uint8_t msgTyp
     case 'C': mItchHandler.template Dispatch<ItchOrderExecutedWithPrice>(iter); break;
     case 'D': mItchHandler.template Dispatch<ItchOrderDelete>(iter); break;
 
-    default:
-    {
-      // Unknown message type
-      // Should log an error
-      break;
-    }
+    default: break;
   }
 }
