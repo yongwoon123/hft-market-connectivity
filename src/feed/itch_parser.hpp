@@ -8,13 +8,15 @@
 #include <cstring>
 #include <stdexcept>
 
+#include "infra/clock.h"
 #include "itch_message_types.h"
 #include "itch_parser.h"  // clangd: provides class declaration for standalone analysis
 
 template <typename THandler>
-ItchParser<THandler>::ItchParser(const std::filesystem::path& path, THandler& handler)
+ItchParser<THandler>::ItchParser(const std::filesystem::path& path, THandler& handler, LatencyRecorder* recorder)
     : mFileDescriptor(::open(path.c_str(), O_RDONLY))
     , mBuffer(ItchParser::kBufSize)
+    , mRecorder(recorder)
     , mItchHandler(handler)
 {
   if (mFileDescriptor < 0)
@@ -107,6 +109,8 @@ void ItchParser<THandler>::Parse(uint64_t limit, std::function<void(uint64_t, ui
 template <typename THandler>
 void ItchParser<THandler>::ProcessMessage(const char* iter, const uint8_t msgType)
 {
+  if (mRecorder) mRecorder->SetT0(infra::now_ns_monotonic());
+
   switch (msgType)
   {
     case 'A': mItchHandler.template Dispatch<ItchAddOrder>(iter); break;

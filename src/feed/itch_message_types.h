@@ -18,7 +18,7 @@ public:
   char                        EventCode()      const { return eventCode; }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -52,7 +52,7 @@ public:
   char                        InverseIndicator()         const { return inverseIndicator; }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -88,7 +88,7 @@ public:
   uint32_t                    Price()                const { return __builtin_bswap32(price); }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;          // Security identifier
   uint16_t trackingNumber;       // Nasdaq internal tracking number
   uint8_t  timestamp[6];         // ns since midnight (big-endian, reconstruct to uint64_t)
@@ -117,7 +117,7 @@ public:
   const char*                 Attribution()          const { return attribution; }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -145,7 +145,7 @@ public:
   uint32_t                    Price()                        const { return __builtin_bswap32(price); }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -168,7 +168,7 @@ public:
   uint32_t                    CancelledShares()      const { return __builtin_bswap32(cancelledShares); }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -190,7 +190,7 @@ public:
   uint64_t                    MatchNumber()          const { return __builtin_bswap64(matchNumber); }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -211,7 +211,7 @@ public:
   uint64_t                    OrderReferenceNumber() const { return __builtin_bswap64(orderReferenceNumber); }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];
@@ -235,7 +235,7 @@ public:
   uint32_t                    ExecutionPrice()       const { return __builtin_bswap32(executionPrice); }
 
 private:
-  char     msgType;
+  [[maybe_unused]] char msgType;
   uint16_t stockLocate;
   uint16_t trackingNumber;
   uint8_t  timestamp[6];

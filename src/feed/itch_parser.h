@@ -6,11 +6,13 @@
 #include <functional>
 #include <vector>
 
+#include "infra/latency_recorder.h"
+
 template <typename THandler>
 class ItchParser
 {
 public:
-  ItchParser(const std::filesystem::path& path, THandler& handler);
+  ItchParser(const std::filesystem::path& path, THandler& handler, LatencyRecorder* recorder = nullptr);
   ~ItchParser();
 
   // progress callback receives (bytes_read, total_bytes); called every 1M messages
@@ -28,6 +30,7 @@ private:
   std::vector<char> mBuffer;
   size_t mCursor = 0;
   size_t mFillEnd = 0;
+  LatencyRecorder* mRecorder = nullptr;
 
   THandler& mItchHandler;
 };

@@ -11,6 +11,7 @@
 #include "feed/itch_message_types.h"
 #include "feed/itch_parser.h"
 #include "infra/clock.h"
+#include "infra/latency_recorder.h"
 #include "order_entry/isender.h"
 #include "order_entry/ouch_entry_session.h"
 #include "order_entry/ouch_message_types.h"
@@ -45,6 +46,21 @@ struct PrintSender : ISender
               << "  Symbol:  " << std::string(msg->GetSymbol(), 8) << '\n'
               << "  Price:   " << msg->GetPrice() / 10000 << "."
                                << std::setw(4) << std::setfill('0') << msg->GetPrice() % 10000 << '\n';
+  }
+};
+
+struct InstrumentedSender : ISender
+{
+  ISender&         inner;
+  LatencyRecorder& recorder;
+
+  InstrumentedSender(ISender& inner_, LatencyRecorder& recorder_)
+      : inner(inner_), recorder(recorder_) {}
+
+  void Send(const uint8_t* data, size_t len) override
+  {
+    recorder.RecordT1(infra::now_ns_monotonic());
+    inner.Send(data, len);
   }
 };
 
@@ -118,12 +134,14 @@ int main()
             << " (locate=" << preOpen.demoLocate << ")\n";
 
   BookManager          bookManager(preOpen.validLocates, preOpen.maxLocate);
-  PrintSender          sender;
+  static LatencyRecorder recorder;  // 512 KB - static puts it in BSS, not the stack
+  PrintSender          printSender;
+  InstrumentedSender   sender{printSender, recorder};
   OrderEntrySession    session{sender};
   session.SetLoggedIn();
   PassiveQuoter        strategy{preOpen.demoLocate, preOpen.demoSymbol, session};
   ItchHandler<PassiveQuoter> handler{bookManager, strategy};
-  ItchParser<ItchHandler<PassiveQuoter>> parser{kFeedPath, handler};
+  ItchParser<ItchHandler<PassiveQuoter>> parser{kFeedPath, handler, &recorder};
 
   auto printBookStats = [&](const char* label)
   {
@@ -186,6 +204,8 @@ int main()
   uint64_t elapsed_ns = infra::now_ns() - start;
 
   std::cout << "Elapsed: " << static_cast<double>(elapsed_ns) / 1e9 << "s\n";
+
+  recorder.PrintPercentiles();
 
   printBookStats("end of day");
 
