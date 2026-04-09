@@ -145,7 +145,7 @@ int main()
       auto ask = book->BestAsk();
       if (!bid || !ask) continue;
       ++twoSided;
-      if (bid->first >= ask->first)
+      if (bid->price >= ask->price)
       {
         ++inverted;
         continue;
@@ -154,8 +154,8 @@ int main()
       if (samples < kSampleSize)
       {
         std::cout << "  locate=" << loc
-                  << " bid=" << bid->first / 10000 << "." << std::setw(2) << std::setfill('0') << (bid->first % 10000) / 100 << "x" << bid->second
-                  << " ask=" << ask->first / 10000 << "." << std::setw(2) << std::setfill('0') << (ask->first % 10000) / 100 << "x" << ask->second
+                  << " bid=" << bid->price / 10000 << "." << std::setw(2) << std::setfill('0') << (bid->price % 10000) / 100 << "x" << bid->totalQty
+                  << " ask=" << ask->price / 10000 << "." << std::setw(2) << std::setfill('0') << (ask->price % 10000) / 100 << "x" << ask->totalQty
                   << "\n";
         ++samples;
       }

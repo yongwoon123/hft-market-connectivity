@@ -32,8 +32,8 @@ TEST(OrderBook, AddBid_BestBidReflectsIt)
   book.AddOrder(1001, 100'0000, 50, 'B');
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first, 100'0000u);
-  EXPECT_EQ(bid->second, 50u);
+  EXPECT_EQ(bid->price, 100'0000u);
+  EXPECT_EQ(bid->totalQty, 50u);
   EXPECT_FALSE(book.BestAsk().has_value());
 }
 
@@ -43,8 +43,8 @@ TEST(OrderBook, AddAsk_BestAskReflectsIt)
   book.AddOrder(2001, 105'0000, 30, 'S');
   auto ask = book.BestAsk();
   ASSERT_TRUE(ask.has_value());
-  EXPECT_EQ(ask->first, 105'0000u);
-  EXPECT_EQ(ask->second, 30u);
+  EXPECT_EQ(ask->price, 105'0000u);
+  EXPECT_EQ(ask->totalQty, 30u);
   EXPECT_FALSE(book.BestBid().has_value());
 }
 
@@ -55,7 +55,7 @@ TEST(OrderBook, MultipleBidLevels_BestBidIsHighest)
   book.AddOrder(1002, 101'0000, 20, 'B');
   book.AddOrder(1003, 99'0000, 10, 'B');
   ASSERT_TRUE(book.BestBid().has_value());
-  EXPECT_EQ(book.BestBid()->first, 101'0000u);
+  EXPECT_EQ(book.BestBid()->price, 101'0000u);
 }
 
 TEST(OrderBook, MultipleAsksLevels_BestAskIsLowest)
@@ -65,7 +65,7 @@ TEST(OrderBook, MultipleAsksLevels_BestAskIsLowest)
   book.AddOrder(2002, 104'0000, 20, 'S');
   book.AddOrder(2003, 106'0000, 30, 'S');
   ASSERT_TRUE(book.BestAsk().has_value());
-  EXPECT_EQ(book.BestAsk()->first, 104'0000u);
+  EXPECT_EQ(book.BestAsk()->price, 104'0000u);
 }
 
 TEST(OrderBook, TwoOrdersSameLevel_QtyAggregated)
@@ -74,7 +74,7 @@ TEST(OrderBook, TwoOrdersSameLevel_QtyAggregated)
   book.AddOrder(1001, 100'0000, 50, 'B');
   book.AddOrder(1002, 100'0000, 30, 'B');
   ASSERT_TRUE(book.BestBid().has_value());
-  EXPECT_EQ(book.BestBid()->second, 80u);
+  EXPECT_EQ(book.BestBid()->totalQty, 80u);
 }
 
 TEST(OrderBook, DuplicateOrderRef_ErrorCounted_BookUnchanged)
@@ -85,8 +85,8 @@ TEST(OrderBook, DuplicateOrderRef_ErrorCounted_BookUnchanged)
   EXPECT_EQ(book.ErrorCount(), 1u);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first, 100'0000u);
-  EXPECT_EQ(bid->second, 50u);
+  EXPECT_EQ(bid->price, 100'0000u);
+  EXPECT_EQ(bid->totalQty, 50u);
 }
 
 TEST(OrderBook, InvalidSide_ErrorCounted_BookUnchanged)
@@ -109,7 +109,7 @@ TEST(OrderBook, PartialCancel_LevelQtyReduced_OrderSurvives)
   book.CancelOrder(1001, 20);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->second, 30u);
+  EXPECT_EQ(bid->totalQty, 30u);
   EXPECT_EQ(book.ErrorCount(), 0u);
 }
 
@@ -130,8 +130,8 @@ TEST(OrderBook, Cancel_DoesNotAffectOtherLevels)
   book.CancelOrder(1001, 50);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first, 101'0000u);
-  EXPECT_EQ(bid->second, 20u);
+  EXPECT_EQ(bid->price, 101'0000u);
+  EXPECT_EQ(bid->totalQty, 20u);
 }
 
 TEST(OrderBook, Cancel_SharedPriceLevel_OnlyRemovesOrdersQty)
@@ -142,7 +142,7 @@ TEST(OrderBook, Cancel_SharedPriceLevel_OnlyRemovesOrdersQty)
   book.CancelOrder(1001, 50);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->second, 30u);
+  EXPECT_EQ(bid->totalQty, 30u);
 }
 
 TEST(OrderBook, CancelUnknownRef_NoCrash_ErrorCounted)
@@ -169,7 +169,7 @@ TEST(OrderBook, OverCancel_SharedLevel_OnlyRemovesOrderContribution)
   book.CancelOrder(1001, 200);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->second, 30u);
+  EXPECT_EQ(bid->totalQty, 30u);
   EXPECT_EQ(book.ErrorCount(), 1u);
 }
 
@@ -182,7 +182,7 @@ TEST(OrderBook, CancelExceedsOrderQty_ButNotLevel_NoUnderflow)
   EXPECT_EQ(book.ErrorCount(), 1u);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->second, 80u);
+  EXPECT_EQ(bid->totalQty, 80u);
 }
 
 /*****************************************************************************
@@ -196,7 +196,7 @@ TEST(OrderBook, PartialExecute_LevelQtyReduced)
   book.ExecuteOrder(1001, 20);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->second, 30u);
+  EXPECT_EQ(bid->totalQty, 30u);
   EXPECT_EQ(book.ErrorCount(), 0u);
 }
 
@@ -237,7 +237,7 @@ TEST(OrderBook, Delete_SharedLevel_OnlyAffectedOrderRemoved)
   book.DeleteOrder(1001);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->second, 30u);
+  EXPECT_EQ(bid->totalQty, 30u);
 }
 
 TEST(OrderBook, DeleteUnknownRef_NoCrash_ErrorCounted)
@@ -282,9 +282,9 @@ TEST(OrderBook, BidDepth_DescendingOrder)
   book.AddOrder(1003, 99'0000, 10, 'B');
   auto depth = book.BidDepth(3);
   ASSERT_EQ(depth.size(), 3u);
-  EXPECT_EQ(depth[0].first, 101'0000u);
-  EXPECT_EQ(depth[1].first, 100'0000u);
-  EXPECT_EQ(depth[2].first, 99'0000u);
+  EXPECT_EQ(depth[0].price, 101'0000u);
+  EXPECT_EQ(depth[1].price, 100'0000u);
+  EXPECT_EQ(depth[2].price, 99'0000u);
 }
 
 TEST(OrderBook, BidDepth_LimitedToN)
@@ -314,8 +314,8 @@ TEST(OrderBook, Replace_NewRefVisibleAtNewPrice)
   book.ReplaceOrder(1001, 2001, 101'0000, 30);
   auto bid = book.BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first, 101'0000u);
-  EXPECT_EQ(bid->second, 30u);
+  EXPECT_EQ(bid->price, 101'0000u);
+  EXPECT_EQ(bid->totalQty, 30u);
   EXPECT_EQ(book.ErrorCount(), 0u);
 }
 
@@ -327,7 +327,7 @@ TEST(OrderBook, Replace_OldRefGone)
   // old level must be gone
   auto depth = book.BidDepth(10);
   ASSERT_EQ(depth.size(), 1u);
-  EXPECT_EQ(depth[0].first, 101'0000u);
+  EXPECT_EQ(depth[0].price, 101'0000u);
 }
 
 TEST(OrderBook, Replace_PreservesSharedLevel)
@@ -339,8 +339,8 @@ TEST(OrderBook, Replace_PreservesSharedLevel)
   // 1002 still at 100'0000
   auto depth = book.BidDepth(10);
   ASSERT_EQ(depth.size(), 2u);
-  EXPECT_EQ(depth[0].first, 101'0000u);
-  EXPECT_EQ(depth[1].second, 20u);
+  EXPECT_EQ(depth[0].price, 101'0000u);
+  EXPECT_EQ(depth[1].totalQty, 20u);
 }
 
 TEST(OrderBook, Replace_SideInherited_AskStaysAsk)
@@ -350,7 +350,7 @@ TEST(OrderBook, Replace_SideInherited_AskStaysAsk)
   book.ReplaceOrder(2001, 3001, 106'0000, 10);
   EXPECT_FALSE(book.BestBid().has_value());
   ASSERT_TRUE(book.BestAsk().has_value());
-  EXPECT_EQ(book.BestAsk()->first, 106'0000u);
+  EXPECT_EQ(book.BestAsk()->price, 106'0000u);
 }
 
 TEST(OrderBook, Replace_UnknownOldRef_ErrorCounted)
@@ -369,9 +369,9 @@ TEST(OrderBook, AskDepth_AscendingOrder)
   book.AddOrder(2003, 106'0000, 10, 'S');
   auto depth = book.AskDepth(3);
   ASSERT_EQ(depth.size(), 3u);
-  EXPECT_EQ(depth[0].first, 104'0000u);
-  EXPECT_EQ(depth[1].first, 105'0000u);
-  EXPECT_EQ(depth[2].first, 106'0000u);
+  EXPECT_EQ(depth[0].price, 104'0000u);
+  EXPECT_EQ(depth[1].price, 105'0000u);
+  EXPECT_EQ(depth[2].price, 106'0000u);
 }
 
 /*****************************************************************************
@@ -392,7 +392,7 @@ TEST(BookManager, AddOrder_CreatesBook_BestBidVisible)
   ASSERT_NE(book, nullptr);
   auto bid = book->BestBid();
   ASSERT_TRUE(bid.has_value());
-  EXPECT_EQ(bid->first, 100'0000u);
+  EXPECT_EQ(bid->price, 100'0000u);
 }
 
 TEST(BookManager, TwoLocates_IndependentBooks)
@@ -453,13 +453,13 @@ TEST(BookManager, Replace_RoutedToCorrectBook)
   ASSERT_NE(book1, nullptr);
   auto bid1 = book1->BestBid();
   ASSERT_TRUE(bid1.has_value());
-  EXPECT_EQ(bid1->first, 101'0000u);
-  EXPECT_EQ(bid1->second, 25u);
+  EXPECT_EQ(bid1->price, 101'0000u);
+  EXPECT_EQ(bid1->totalQty, 25u);
   const OrderBook* book2 = mgr.GetBook(2);
   ASSERT_NE(book2, nullptr);
   auto bid2 = book2->BestBid();
   ASSERT_TRUE(bid2.has_value());
-  EXPECT_EQ(bid2->first, 200'0000u);
+  EXPECT_EQ(bid2->price, 200'0000u);
 }
 
 TEST(BookManager, Replace_UnknownLocate_NoCrash)

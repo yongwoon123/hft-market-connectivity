@@ -33,7 +33,7 @@ void PassiveQuoter::OnBookUpdate(uint16_t locate, const OrderBook& book)
   }
 
   // TODO: return if locked/crossed market (bid >= ask)
-  if (bestBid->first >= bestAsk->first)
+  if (bestBid->price >= bestAsk->price)
   {
     return;
   }
@@ -48,7 +48,7 @@ void PassiveQuoter::OnBookUpdate(uint16_t locate, const OrderBook& book)
   mSession.EnterOrder('B',
                       100,
                       mSymbol.data(),
-                      static_cast<uint64_t>(bestBid->first) + 1,
+                      static_cast<uint64_t>(bestBid->price) + 1,
                       '0',
                       'Y',
                       'P',

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -12,6 +11,15 @@ enum class Side : char
   Ask = 'S'
 };
 
+struct Order
+{
+  uint64_t orderRef;
+  uint32_t price;
+  uint32_t quantity;
+
+  bool operator<(const Order& rhs) const { return price < rhs.price; }
+};
+
 struct OrderEntry
 {
   uint32_t price;
@@ -19,9 +27,18 @@ struct OrderEntry
   Side side;
 };
 
+struct Level
+{
+  uint32_t price;
+  uint32_t orderCount;
+  uint64_t totalQty;
+};
+
 class OrderBook
 {
 public:
+  OrderBook();
+
   void AddOrder(uint64_t orderRef, uint32_t price, uint32_t quantity, char side) noexcept;
   void CancelOrder(uint64_t orderRef, uint32_t cancelledQuantity) noexcept;
   void ExecuteOrder(uint64_t orderRef, uint32_t executedQuantity) noexcept;
@@ -30,17 +47,17 @@ public:
 
   uint64_t ErrorCount() const noexcept { return mErrorCount; }
 
-  std::optional<std::pair<uint32_t, uint32_t>> BestBid() const noexcept;
-  std::optional<std::pair<uint32_t, uint32_t>> BestAsk() const noexcept;
+  std::optional<Level> BestBid() const noexcept;
+  std::optional<Level> BestAsk() const noexcept;
 
-  std::vector<std::pair<uint32_t, uint32_t>> BidDepth(size_t depth) const noexcept;
-  std::vector<std::pair<uint32_t, uint32_t>> AskDepth(size_t depth) const noexcept;
+  std::vector<Level> BidDepth(size_t depth) const noexcept;
+  std::vector<Level> AskDepth(size_t depth) const noexcept;
 
 private:
-  void ReduceLevel(OrderEntry& entry, uint32_t quantityReduction);
+  bool ReduceLevel(uint64_t orderRef, OrderEntry& entry, uint32_t quantityReduction) noexcept;
 
-  std::map<uint32_t, uint32_t> mBids;  // Price -> Quantity
-  std::map<uint32_t, uint32_t> mAsks;  // Price -> Quantity
+  std::vector<Order> mBids;  // Sorted Ascending back is best Bid
+  std::vector<Order> mAsks;  // Sorted Ascending front is best Ask
 
   std::unordered_map<uint64_t, OrderEntry> mOrders;
 

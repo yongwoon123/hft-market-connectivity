@@ -1,5 +1,14 @@
 #include "order_book.h"
 
+#include <algorithm>
+
+OrderBook::OrderBook()
+{
+  mOrders.reserve(128);
+  mBids.reserve(64);
+  mAsks.reserve(64);
+}
+
 void OrderBook::AddOrder(uint64_t orderRef, uint32_t price, uint32_t quantity, char side) noexcept
 {
   if ((side != 'B' && side != 'S') || mOrders.contains(orderRef))
@@ -11,13 +20,16 @@ void OrderBook::AddOrder(uint64_t orderRef, uint32_t price, uint32_t quantity, c
   const Side s = static_cast<Side>(side);
   mOrders[orderRef] = {price, quantity, s};
 
+  Order o = {orderRef, price, quantity};
   if (s == Side::Bid)
   {
-    mBids[price] += quantity;
+    auto iter = std::upper_bound(mBids.begin(), mBids.end(), o);
+    mBids.insert(iter, o);
   }
   else
   {
-    mAsks[price] += quantity;
+    auto iter = std::upper_bound(mAsks.begin(), mAsks.end(), o);
+    mAsks.insert(iter, o);
   }
 }
 
@@ -33,7 +45,7 @@ void OrderBook::CancelOrder(uint64_t orderRef, uint32_t cancelledQuantity) noexc
     return;
   }
 
-  ReduceLevel(iter->second, cancelledQuantity);
+  ReduceLevel(iter->first, iter->second, cancelledQuantity);
 }
 
 void OrderBook::ExecuteOrder(uint64_t orderRef, uint32_t executedQuantity) noexcept
@@ -45,7 +57,7 @@ void OrderBook::ExecuteOrder(uint64_t orderRef, uint32_t executedQuantity) noexc
     return;
   }
 
-  ReduceLevel(iter->second, executedQuantity);
+  ReduceLevel(iter->first, iter->second, executedQuantity);
 }
 
 void OrderBook::DeleteOrder(uint64_t orderRef) noexcept
@@ -59,7 +71,7 @@ void OrderBook::DeleteOrder(uint64_t orderRef) noexcept
 
   if (iter->second.quantity > 0)
   {
-    ReduceLevel(iter->second, iter->second.quantity);
+    ReduceLevel(iter->first, iter->second, iter->second.quantity);
   }
 
   mOrders.erase(iter);
@@ -82,66 +94,101 @@ void OrderBook::ReplaceOrder(uint64_t oldOrderRef,
   AddOrder(newOrderRef, price, quantity, side);
 }
 
-void OrderBook::ReduceLevel(OrderEntry& entry, uint32_t quantity)
+bool OrderBook::ReduceLevel(uint64_t orderRef, OrderEntry& entry, uint32_t quantity) noexcept
 {
-  auto& level = (entry.side == Side::Bid) ? mBids : mAsks;
-  auto iter = level.find(entry.price);
+  auto& book = (entry.side == Side::Bid) ? mBids : mAsks;
 
-  if (iter == level.end())
+  const Order key{orderRef, entry.price, 0};
+  auto lo = std::lower_bound(book.begin(), book.end(), key);
+  auto hi = std::upper_bound(lo, book.end(), key);
+  auto orderIter =
+      std::find_if(lo, hi, [orderRef](const Order& o) { return o.orderRef == orderRef; });
+
+  if (orderIter == hi)
   {
     ++mErrorCount;
-    return;
+    return false;
   }
 
-  uint32_t& levelQuantity = iter->second;
-  if (levelQuantity >= quantity && entry.quantity >= quantity)
+  if (quantity <= entry.quantity)
   {
-    levelQuantity -= quantity;
+    orderIter->quantity -= quantity;
     entry.quantity -= quantity;
-  }
-  else if (levelQuantity >= entry.quantity)
-  {
-    // Cancel/execute quantity exceeds order's remaining quantity
-    // Clamp to order's contribution
-    levelQuantity -= entry.quantity;
-    entry.quantity = 0;
-    ++mErrorCount;
   }
   else
   {
-    // Level qty < order qty book state corrupted
-    // Clamp both to zero
-    levelQuantity = 0;
+    // Over-cancel: clamp to order's remaining quantity
+    orderIter->quantity = 0;
     entry.quantity = 0;
     ++mErrorCount;
   }
 
-  if (levelQuantity == 0)
+  if (orderIter->quantity == 0)
   {
-    level.erase(iter);
+    book.erase(orderIter);
   }
+
+  return true;
 }
 
-std::optional<std::pair<uint32_t, uint32_t>> OrderBook::BestBid() const noexcept
+std::optional<Level> OrderBook::BestBid() const noexcept
 {
   if (mBids.empty()) return std::nullopt;
-  return *mBids.rbegin();
+  const uint32_t bestPrice = mBids.back().price;
+  Level level{bestPrice, 0, 0};
+  for (auto it = mBids.rbegin(); it != mBids.rend() && it->price == bestPrice; ++it)
+  {
+    ++level.orderCount;
+    level.totalQty += it->quantity;
+  }
+  return level;
 }
 
-std::optional<std::pair<uint32_t, uint32_t>> OrderBook::BestAsk() const noexcept
+std::optional<Level> OrderBook::BestAsk() const noexcept
 {
   if (mAsks.empty()) return std::nullopt;
-  return *mAsks.begin();
+  const uint32_t bestPrice = mAsks.front().price;
+  Level level{bestPrice, 0, 0};
+  for (auto it = mAsks.begin(); it != mAsks.end() && it->price == bestPrice; ++it)
+  {
+    ++level.orderCount;
+    level.totalQty += it->quantity;
+  }
+  return level;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> OrderBook::BidDepth(size_t depth) const noexcept
+std::vector<Level> OrderBook::BidDepth(size_t depth) const noexcept
 {
-  auto end = std::next(mBids.rbegin(), static_cast<ptrdiff_t>(std::min(depth, mBids.size())));
-  return {mBids.rbegin(), end};
+  std::vector<Level> result;
+  result.reserve(depth);
+  for (auto it = mBids.rbegin(); it != mBids.rend() && result.size() < depth;)
+  {
+    Level level{it->price, 0, 0};
+    while (it != mBids.rend() && it->price == level.price)
+    {
+      ++level.orderCount;
+      level.totalQty += it->quantity;
+      ++it;
+    }
+    result.push_back(level);
+  }
+  return result;
 }
 
-std::vector<std::pair<uint32_t, uint32_t>> OrderBook::AskDepth(size_t depth) const noexcept
+std::vector<Level> OrderBook::AskDepth(size_t depth) const noexcept
 {
-  auto end = std::next(mAsks.begin(), static_cast<ptrdiff_t>(std::min(depth, mAsks.size())));
-  return {mAsks.begin(), end};
+  std::vector<Level> result;
+  result.reserve(depth);
+  for (auto it = mAsks.begin(); it != mAsks.end() && result.size() < depth;)
+  {
+    Level level{it->price, 0, 0};
+    while (it != mAsks.end() && it->price == level.price)
+    {
+      ++level.orderCount;
+      level.totalQty += it->quantity;
+      ++it;
+    }
+    result.push_back(level);
+  }
+  return result;
 }
